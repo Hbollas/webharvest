@@ -2,10 +2,12 @@ import click
 import time 
 import asyncio
 from pathlib import Path
-from .http import fetch_text
+from .http import fetch_text_retry
 from rich.console import Console
-from .spiders.quotes import parse_quotes, page_url
+from .spiders.quotes import parse_quotes, page_url, BASE
 from .storage.sqlite import SqliteStore
+from .robots import fetch_disallows, is_allowed
+
 
 console = Console()
 
@@ -31,7 +33,7 @@ def fetch(url: str):
 def parse_quotes_cmd(page: int):
     """Fetch one page and parse quotes (prints a small preview)."""
     url = page_url(page)
-    status, html = asyncio.run(fetch_text(url))
+    status, html = asyncio.run(fetch_text_retry(url))
     if status != 200:
         console.print(f"[red]HTTP {status}[/] {url}")
         raise SystemExit(1)
@@ -43,16 +45,30 @@ def parse_quotes_cmd(page: int):
 @app.command("scrape-quotes")
 @click.option("--max-pages", default=3, show_default=True, type=int, help="How many pages to scrape")
 @click.option("--db", default="data/quotes.db", show_default=True, type=str, help="SQLite database path")
-def scrape_quotes(max_pages: int, db: str):
+@click.option("--delay", default=0.5, show_default=True, type=float, help="Polite pause between requests (seconds)")
+@click.option("--ignore-robots", is_flag=True, help="Ignore robots.txt (not recommended)")
+def scrape_quotes(max_pages: int, db: str, delay: float, ignore_robots: bool):
     """Fetch N pages, parse, and store in SQLite."""
     store = SqliteStore(db)
     inserted_before = store.count()
     total_parsed = 0
 
+    # Load disallow rules once
+    disallows = [] if ignore_robots else fetch_disallows(BASE)
+
     try:
         for page in range(1, max_pages + 1):
             url = page_url(page)
-            status, html = asyncio.run(fetch_text(url))
+            if not ignore_robots and not is_allowed(url, disallows):
+                console.print(f"[yellow]Skipping disallowed[/] {url}")
+                continue
+
+            try:
+                status, html = asyncio.run(fetch_text_retry(url))
+            except Exception as e:
+                console.print(f"[red]Fetch failed:[/] {e}")
+                continue
+
             if status != 200:
                 console.print(f"[red]HTTP {status}[/] {url}")
                 continue
@@ -60,7 +76,7 @@ def scrape_quotes(max_pages: int, db: str):
             total_parsed += len(rows)
             store.insert_quotes(rows)
             console.print(f"Page {page}: parsed {len(rows)}")
-            time.sleep(0.5)  # polite pause
+            time.sleep(delay)  # small pause = polite
     finally:
         inserted_after = store.count()
         delta = inserted_after - inserted_before
