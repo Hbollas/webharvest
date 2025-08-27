@@ -1,3 +1,4 @@
+LICENSE
 README.md
 pyproject.toml
 src/webharvest/__init__.py
@@ -10,6 +11,7 @@ src/webharvest.egg-info/dependency_links.txt
 src/webharvest.egg-info/entry_points.txt
 src/webharvest.egg-info/requires.txt
 src/webharvest.egg-info/top_level.txt
+src/webharvest/spiders/books.py
 src/webharvest/spiders/quotes.py
 src/webharvest/storage/sqlite.py
 tests/test_quotes_parser.py

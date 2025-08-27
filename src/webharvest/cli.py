@@ -7,6 +7,7 @@ from rich.console import Console
 from .http import fetch_text_retry
 from .spiders.quotes import parse_quotes, page_url, BASE
 from .storage.sqlite import SqliteStore
+from .spiders import books as books_spider
 from .robots import fetch_disallows, is_allowed
 from typing import List, Dict
 from pathlib import Path
@@ -144,6 +145,78 @@ def top_authors(db: str, k: int):
     console.print("[bold]Top authors[/]:")
     for author, n in pairs:
         console.print(f"- {author}: {n}")
+
+
+@app.command("parse-books")
+@click.option("--page", default=1, show_default=True, type=int)
+def parse_books_cmd(page: int):
+    """Fetch one book listing page and preview a few entries."""
+    url = books_spider.page_url(page)
+    status, html = asyncio.run(fetch_text_retry(url))
+    if status != 200:
+        console.print(f"[red]HTTP {status}[/] {url}")
+        raise SystemExit(1)
+    rows = books_spider.parse_books(html, url)
+    console.print(f"[bold]Parsed {len(rows)} books from {url}[/]")
+    for r in rows[:3]:
+        console.print(
+            f"- {r['title']} | £{r['price_gbp']} | rating={r['rating']} | in_stock={r['in_stock']}"
+        )
+
+
+@app.command("scrape-books")
+@click.option("--max-pages", default=3, show_default=True, type=int)
+@click.option("--db", default="data/quotes.db", show_default=True, type=str)
+@click.option("--delay", default=0.5, show_default=True, type=float)
+@click.option("--ignore-robots", is_flag=True)
+def scrape_books(max_pages: int, db: str, delay: float, ignore_robots: bool):
+    """Scrape book listings and store them."""
+    store = SqliteStore(db)
+    before = store.count_books()
+    total_parsed = 0
+    disallows = [] if ignore_robots else fetch_disallows(books_spider.BASE)
+
+    try:
+        for page in range(1, max_pages + 1):
+            url = books_spider.page_url(page)
+            if not ignore_robots and not is_allowed(url, disallows):
+                console.print(f"[yellow]Skipping disallowed[/] {url}")
+                continue
+            try:
+                status, html = asyncio.run(fetch_text_retry(url))
+            except Exception as e:
+                console.print(f"[red]Fetch failed:[/] {e}")
+                continue
+            if status != 200:
+                console.print(f"[red]HTTP {status}[/] {url}")
+                continue
+            rows = books_spider.parse_books(html, url)
+            total_parsed += len(rows)
+            store.insert_books(rows)
+            console.print(f"Page {page}: parsed {len(rows)}")
+            time.sleep(delay)
+    finally:
+        after = store.count_books()
+        console.print(
+            f"[bold green]Done[/]. Parsed {total_parsed} rows. Inserted {after - before} new rows. Total books: {after}"
+        )
+        store.close()
+
+
+@app.command("book-stats")
+@click.option("--db", default="data/quotes.db", show_default=True, type=str)
+@click.option("--k", default=5, show_default=True, type=int)
+def book_stats(db: str, k: int):
+    """Show top-rated books."""
+    store = SqliteStore(db)
+    pairs = store.top_rated_books(k)
+    store.close()
+    if not pairs:
+        console.print("[yellow]No books yet. Run scrape-books first.[/]")
+        return
+    console.print("[bold]Top-rated books[/]:")
+    for title, price, rating in pairs:
+        console.print(f"- {title} (rating {rating}, £{price:.2f})")
 
 
 if __name__ == "__main__":
