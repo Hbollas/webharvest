@@ -14,5 +14,7 @@ src/webharvest.egg-info/top_level.txt
 src/webharvest/spiders/books.py
 src/webharvest/spiders/quotes.py
 src/webharvest/storage/sqlite.py
+tests/test_books_parser.py
 tests/test_quotes_parser.py
 tests/test_sqlite.py
+tests/test_sqlite_books.py
