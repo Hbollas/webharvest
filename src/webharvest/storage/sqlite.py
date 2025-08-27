@@ -1,6 +1,6 @@
 from pathlib import Path
 import sqlite3
-from typing import Iterable, Dict, Tuple
+from typing import Iterable, Dict
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS quotes (
@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS quotes (
 );
 """
 
+
 class SqliteStore:
     def __init__(self, db_path: str):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -22,12 +23,11 @@ class SqliteStore:
         self.conn.commit()
 
     def insert_quotes(self, rows: Iterable[Dict]) -> int:
-        cur = self.conn.executemany(
+        self.conn.executemany(
             "INSERT OR IGNORE INTO quotes (text, author, tags, source_url) VALUES (?, ?, ?, ?)",
             ((r["text"], r["author"], ",".join(r["tags"]), r["source_url"]) for r in rows),
         )
         self.conn.commit()
-        # sqlite3's executemany doesn't always give inserted count reliably; recompute via changes()
         return self.conn.total_changes
 
     def count(self) -> int:

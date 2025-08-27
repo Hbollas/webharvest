@@ -6,6 +6,7 @@ DEFAULT_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
+
 async def fetch_text_retry(url: str, tries: int = 3, backoff: float = 1.6) -> tuple[int, str]:
     """
     Fetch URL with simple exponential backoff on transient errors.

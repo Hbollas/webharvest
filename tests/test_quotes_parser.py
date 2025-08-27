@@ -1,6 +1,7 @@
 from pathlib import Path
 from webharvest.spiders.quotes import parse_quotes
 
+
 def test_parse_quotes_sample():
     html = Path(__file__).with_name("sample_quotes.html").read_text(encoding="utf-8")
     rows = parse_quotes(html, "https://quotes.toscrape.com/")

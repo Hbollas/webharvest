@@ -1,10 +1,12 @@
 from urllib.parse import urlparse, urljoin
 import httpx
 
+
 def robots_url(base: str) -> str:
     p = urlparse(base)
     origin = f"{p.scheme}://{p.netloc}"
     return urljoin(origin, "/robots.txt")
+
 
 def fetch_disallows(base: str, user_agent: str = "*") -> list[str]:
     """
@@ -27,12 +29,13 @@ def fetch_disallows(base: str, user_agent: str = "*") -> list[str]:
             continue
         if line.lower().startswith("user-agent:"):
             ua = line.split(":", 1)[1].strip()
-            ua_block = (ua == "*" or ua.lower() == user_agent.lower())
+            ua_block = ua == "*" or ua.lower() == user_agent.lower()
         elif ua_block and line.lower().startswith("disallow:"):
             path = line.split(":", 1)[1].strip()
             if path:
                 disallows.append(path)
     return disallows
+
 
 def is_allowed(url: str, disallows: list[str]) -> bool:
     path = urlparse(url).path or "/"

@@ -4,8 +4,10 @@ from urllib.parse import urljoin
 
 BASE = "https://quotes.toscrape.com/"
 
+
 def page_url(page: int) -> str:
     return BASE if page <= 1 else urljoin(BASE, f"/page/{page}/")
+
 
 def parse_quotes(html: str, source_url: str) -> List[Dict]:
     """
@@ -28,11 +30,13 @@ def parse_quotes(html: str, source_url: str) -> List[Dict]:
         if not (text_el and author_el):
             continue
 
-        rows.append({
-            "text": text_el.get_text(strip=True).strip("“”"),
-            "author": author_el.get_text(strip=True),
-            "tags": [t.get_text(strip=True) for t in tag_els],
-            "source_url": source_url,
-        })
+        rows.append(
+            {
+                "text": text_el.get_text(strip=True).strip("“”"),
+                "author": author_el.get_text(strip=True),
+                "tags": [t.get_text(strip=True) for t in tag_els],
+                "source_url": source_url,
+            }
+        )
 
     return rows

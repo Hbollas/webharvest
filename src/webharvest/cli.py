@@ -1,32 +1,36 @@
 import click
-import time 
 import asyncio
-from pathlib import Path
-from .http import fetch_text_retry
+import time
 from rich.console import Console
+
+from .http import fetch_text_retry
 from .spiders.quotes import parse_quotes, page_url, BASE
 from .storage.sqlite import SqliteStore
 from .robots import fetch_disallows, is_allowed
 
-
 console = Console()
+
 
 @click.group(help="webharvest - learn scraping step by step")
 def app():
     pass
+
 
 @app.command("hello")
 @click.option("--name", "-n", default="world", help="Who to greet")
 def hello(name: str):
     console.print(f"[bold green]Hello, {name}![/]")
 
+
 @app.command("fetch")
 @click.option("--url", default="https://quotes.toscrape.com/", show_default=True)
 def fetch(url: str):
     """Fetch a page and print a short snippet (sanity check)."""
-    status, html = asyncio.run(fetch_text(url))
+    status, html = asyncio.run(fetch_text_retry(url))
     console.print(f"Status: {status}")
-    console.print(f"HTML snippet: {html[:200].replace('\n',' ')}...")
+    snippet = (html[:200] if html else "").replace("\n", " ")
+    console.print(f"HTML snippet: {snippet}...")
+
 
 @app.command("parse-quotes")
 @click.option("--page", default=1, show_default=True, type=int)
@@ -42,10 +46,21 @@ def parse_quotes_cmd(page: int):
     for r in rows[:3]:
         console.print(f"- {r['text']} — {r['author']} [{', '.join(r['tags'])}]")
 
+
 @app.command("scrape-quotes")
-@click.option("--max-pages", default=3, show_default=True, type=int, help="How many pages to scrape")
-@click.option("--db", default="data/quotes.db", show_default=True, type=str, help="SQLite database path")
-@click.option("--delay", default=0.5, show_default=True, type=float, help="Polite pause between requests (seconds)")
+@click.option(
+    "--max-pages", default=3, show_default=True, type=int, help="How many pages to scrape"
+)
+@click.option(
+    "--db", default="data/quotes.db", show_default=True, type=str, help="SQLite database path"
+)
+@click.option(
+    "--delay",
+    default=0.5,
+    show_default=True,
+    type=float,
+    help="Polite pause between requests (seconds)",
+)
 @click.option("--ignore-robots", is_flag=True, help="Ignore robots.txt (not recommended)")
 def scrape_quotes(max_pages: int, db: str, delay: float, ignore_robots: bool):
     """Fetch N pages, parse, and store in SQLite."""
@@ -53,7 +68,6 @@ def scrape_quotes(max_pages: int, db: str, delay: float, ignore_robots: bool):
     inserted_before = store.count()
     total_parsed = 0
 
-    # Load disallow rules once
     disallows = [] if ignore_robots else fetch_disallows(BASE)
 
     try:
@@ -62,13 +76,11 @@ def scrape_quotes(max_pages: int, db: str, delay: float, ignore_robots: bool):
             if not ignore_robots and not is_allowed(url, disallows):
                 console.print(f"[yellow]Skipping disallowed[/] {url}")
                 continue
-
             try:
                 status, html = asyncio.run(fetch_text_retry(url))
             except Exception as e:
                 console.print(f"[red]Fetch failed:[/] {e}")
                 continue
-
             if status != 200:
                 console.print(f"[red]HTTP {status}[/] {url}")
                 continue
@@ -76,20 +88,26 @@ def scrape_quotes(max_pages: int, db: str, delay: float, ignore_robots: bool):
             total_parsed += len(rows)
             store.insert_quotes(rows)
             console.print(f"Page {page}: parsed {len(rows)}")
-            time.sleep(delay)  # small pause = polite
+            time.sleep(delay)
     finally:
         inserted_after = store.count()
         delta = inserted_after - inserted_before
-        console.print(f"[bold green]Done[/]. Parsed {total_parsed} rows. Inserted {delta} new rows. Total in DB: {inserted_after}")
+        console.print(
+            f"[bold green]Done[/]. Parsed {total_parsed} rows. Inserted {delta} new rows. Total in DB: {inserted_after}"
+        )
         store.close()
 
+
 @app.command("stats")
-@click.option("--db", default="data/quotes.db", show_default=True, type=str, help="SQLite database path")
+@click.option(
+    "--db", default="data/quotes.db", show_default=True, type=str, help="SQLite database path"
+)
 def stats(db: str):
     """Show simple dataset stats."""
     store = SqliteStore(db)
     console.print(f"[bold]Rows:[/] {store.count()}  (db: {db})")
     store.close()
+
 
 if __name__ == "__main__":
     app()
