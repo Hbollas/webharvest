@@ -1,6 +1,6 @@
 from pathlib import Path
 import sqlite3
-from typing import Iterable, Dict
+from typing import Iterable, Dict, List, Tuple
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS quotes (
@@ -36,3 +36,24 @@ class SqliteStore:
 
     def close(self) -> None:
         self.conn.close()
+
+    def all_quotes(self) -> List[Dict]:
+        cur = self.conn.execute("SELECT text, author, tags, source_url FROM quotes ORDER BY id")
+        rows = []
+        for text, author, tags, source_url in cur.fetchall():
+            rows.append(
+                {
+                    "text": text,
+                    "author": author,
+                    "tags": tags.split(",") if tags else [],
+                    "source_url": source_url,
+                }
+            )
+        return rows
+
+    def top_authors(self, k: int = 5) -> List[Tuple[str, int]]:
+        cur = self.conn.execute(
+            "SELECT author, COUNT(*) as n FROM quotes GROUP BY author ORDER BY n DESC, author ASC LIMIT ?",
+            (k,),
+        )
+        return cur.fetchall()

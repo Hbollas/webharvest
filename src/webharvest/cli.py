@@ -1,4 +1,5 @@
 import click
+import csv
 import asyncio
 import time
 from rich.console import Console
@@ -7,6 +8,8 @@ from .http import fetch_text_retry
 from .spiders.quotes import parse_quotes, page_url, BASE
 from .storage.sqlite import SqliteStore
 from .robots import fetch_disallows, is_allowed
+from typing import List, Dict
+from pathlib import Path
 
 console = Console()
 
@@ -107,6 +110,40 @@ def stats(db: str):
     store = SqliteStore(db)
     console.print(f"[bold]Rows:[/] {store.count()}  (db: {db})")
     store.close()
+
+
+@app.command("export-csv")
+@click.option("--db", default="data/quotes.db", show_default=True)
+@click.option("--out", default="data/quotes.csv", show_default=True)
+def export_csv(db: str, out: str):
+    """Export all quotes to a CSV file."""
+    store = SqliteStore(db)
+    rows: List[Dict] = store.all_quotes()
+    store.close()
+
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["text", "author", "tags", "source_url"])
+        w.writeheader()
+        for r in rows:
+            w.writerow({**r, "tags": ",".join(r["tags"])})
+    console.print(f"[bold green]Wrote[/] {len(rows)} rows to {out}")
+
+
+@app.command("top-authors")
+@click.option("--db", default="data/quotes.db", show_default=True)
+@click.option("--k", default=5, show_default=True, type=int)
+def top_authors(db: str, k: int):
+    """Show the top-K authors by quote count."""
+    store = SqliteStore(db)
+    pairs = store.top_authors(k)
+    store.close()
+    if not pairs:
+        console.print("[yellow]No data yet. Run scrape first.[/]")
+        raise SystemExit(0)
+    console.print("[bold]Top authors[/]:")
+    for author, n in pairs:
+        console.print(f"- {author}: {n}")
 
 
 if __name__ == "__main__":
