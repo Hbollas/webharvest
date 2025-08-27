@@ -1,0 +1,2 @@
+[console_scripts]
+webharvest = webharvest.cli:app
