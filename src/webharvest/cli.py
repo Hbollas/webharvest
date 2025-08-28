@@ -204,5 +204,44 @@ def book_stats(db: str, k: int):
         console.print(f"- {title} (rating {rating}, £{price:.2f})")
 
 
+@app.command("report")
+@click.option("--db", default="data/quotes.db", show_default=True)
+@click.option("--k", default=5, show_default=True, help="Top-K items to display")
+def report(db: str, k: int):
+    """Print a quick, portfolio-friendly project report."""
+    store = SqliteStore(db)
+
+    # Totals
+    q_total = store.count()
+    b_total = store.count_books()
+    console.print("[bold]webharvest report[/]")
+    console.print(f"- Quotes in DB: {q_total}")
+    console.print(f"- Books in DB:  {b_total}")
+
+    # Quotes: top authors & tags
+    if q_total:
+        console.print("\n[bold]Top authors[/]:")
+        for author, n in store.top_authors(k):
+            console.print(f"- {author}: {n}")
+
+        console.print("\n[bold]Top tags[/]:")
+        for tag, n in store.tag_counts(k):
+            console.print(f"- {tag}: {n}")
+
+    # Books: stock + avg price by rating
+    if b_total:
+        in_stock, total = store.stock_counts()
+        console.print(f"\n[bold]Books stock[/]: {in_stock}/{total} in stock")
+        console.print("[bold]Average price by rating[/]:")
+        rows = store.avg_price_by_rating()
+        if rows:
+            for rating, avg in rows:
+                console.print(f"- {rating}★: £{avg:.2f}")
+        else:
+            console.print("- no price/rating data")
+
+    store.close()
+
+
 if __name__ == "__main__":
     app()

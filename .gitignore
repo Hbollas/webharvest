@@ -9,3 +9,11 @@ data/
 
 webharvest.egg-info/
 src/webharvest.egg-info/
+
+*.egg-info/
+webharvest.egg-info/
+src/webharvest.egg-info/
+
+*.egg-info/
+webharvest.egg-info/
+src/webharvest.egg-info/
