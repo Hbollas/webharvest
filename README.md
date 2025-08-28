@@ -36,7 +36,7 @@ webharvest top-authors [--db PATH] [--k K] – small analytics
 
 webharvest export-csv [--db PATH] [--out PATH] – export to CSV
 
-## Project Structure 
+## Project Structure
 src/webharvest/
   cli.py              # Click CLI (commands)
   http.py             # httpx client with retries/backoff
@@ -45,4 +45,3 @@ src/webharvest/
   storage/sqlite.py   # SQLite schema + CRUD
 tests/                # parser + storage tests (offline sample HTML)
 .github/workflows/    # CI (ruff, black, pytest)
-

@@ -1,10 +1,9 @@
 import click
 import csv
 import asyncio
-import time
 from rich.console import Console
 
-from .http import fetch_text_retry
+from .http import fetch_text_retry, fetch_many
 from .spiders.quotes import parse_quotes, page_url, BASE
 from .storage.sqlite import SqliteStore
 from .spiders import books as books_spider
@@ -52,47 +51,35 @@ def parse_quotes_cmd(page: int):
 
 
 @app.command("scrape-quotes")
-@click.option(
-    "--max-pages", default=3, show_default=True, type=int, help="How many pages to scrape"
-)
-@click.option(
-    "--db", default="data/quotes.db", show_default=True, type=str, help="SQLite database path"
-)
-@click.option(
-    "--delay",
-    default=0.5,
-    show_default=True,
-    type=float,
-    help="Polite pause between requests (seconds)",
-)
-@click.option("--ignore-robots", is_flag=True, help="Ignore robots.txt (not recommended)")
-def scrape_quotes(max_pages: int, db: str, delay: float, ignore_robots: bool):
+@click.option("--max-pages", default=3, show_default=True, type=int)
+@click.option("--db", default="data/quotes.db", show_default=True, type=str)
+@click.option("--delay", default=0.5, show_default=True, type=float)
+@click.option("--concurrency", default=5, show_default=True, type=int)
+@click.option("--ignore-robots", is_flag=True)
+def scrape_quotes(max_pages: int, db: str, delay: float, concurrency: int, ignore_robots: bool):
     """Fetch N pages, parse, and store in SQLite."""
     store = SqliteStore(db)
     inserted_before = store.count()
     total_parsed = 0
 
     disallows = [] if ignore_robots else fetch_disallows(BASE)
+    urls = [page_url(p) for p in range(1, max_pages + 1)]
+    if not ignore_robots:
+        urls = [u for u in urls if is_allowed(u, disallows)]
+
+    # Fetch concurrently
+    results = asyncio.run(fetch_many(urls, concurrency=concurrency, delay=delay))
 
     try:
-        for page in range(1, max_pages + 1):
-            url = page_url(page)
-            if not ignore_robots and not is_allowed(url, disallows):
-                console.print(f"[yellow]Skipping disallowed[/] {url}")
+        for u in urls:
+            status, html = results.get(u, (0, ""))
+            if status != 200 or not html:
+                console.print(f"[red]HTTP {status}[/] {u}")
                 continue
-            try:
-                status, html = asyncio.run(fetch_text_retry(url))
-            except Exception as e:
-                console.print(f"[red]Fetch failed:[/] {e}")
-                continue
-            if status != 200:
-                console.print(f"[red]HTTP {status}[/] {url}")
-                continue
-            rows = parse_quotes(html, url)
+            rows = parse_quotes(html, u)
             total_parsed += len(rows)
             store.insert_quotes(rows)
-            console.print(f"Page {page}: parsed {len(rows)}")
-            time.sleep(delay)
+            console.print(f"{u} -> parsed {len(rows)}")
     finally:
         inserted_after = store.count()
         delta = inserted_after - inserted_before
@@ -168,33 +155,31 @@ def parse_books_cmd(page: int):
 @click.option("--max-pages", default=3, show_default=True, type=int)
 @click.option("--db", default="data/quotes.db", show_default=True, type=str)
 @click.option("--delay", default=0.5, show_default=True, type=float)
+@click.option("--concurrency", default=5, show_default=True, type=int)
 @click.option("--ignore-robots", is_flag=True)
-def scrape_books(max_pages: int, db: str, delay: float, ignore_robots: bool):
+def scrape_books(max_pages: int, db: str, delay: float, concurrency: int, ignore_robots: bool):
     """Scrape book listings and store them."""
     store = SqliteStore(db)
     before = store.count_books()
     total_parsed = 0
+
     disallows = [] if ignore_robots else fetch_disallows(books_spider.BASE)
+    urls = [books_spider.page_url(p) for p in range(1, max_pages + 1)]
+    if not ignore_robots:
+        urls = [u for u in urls if is_allowed(u, disallows)]
+
+    results = asyncio.run(fetch_many(urls, concurrency=concurrency, delay=delay))
 
     try:
-        for page in range(1, max_pages + 1):
-            url = books_spider.page_url(page)
-            if not ignore_robots and not is_allowed(url, disallows):
-                console.print(f"[yellow]Skipping disallowed[/] {url}")
+        for u in urls:
+            status, html = results.get(u, (0, ""))
+            if status != 200 or not html:
+                console.print(f"[red]HTTP {status}[/] {u}")
                 continue
-            try:
-                status, html = asyncio.run(fetch_text_retry(url))
-            except Exception as e:
-                console.print(f"[red]Fetch failed:[/] {e}")
-                continue
-            if status != 200:
-                console.print(f"[red]HTTP {status}[/] {url}")
-                continue
-            rows = books_spider.parse_books(html, url)
+            rows = books_spider.parse_books(html, u)
             total_parsed += len(rows)
             store.insert_books(rows)
-            console.print(f"Page {page}: parsed {len(rows)}")
-            time.sleep(delay)
+            console.print(f"{u} -> parsed {len(rows)}")
     finally:
         after = store.count_books()
         console.print(
