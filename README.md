@@ -45,3 +45,34 @@ src/webharvest/
   storage/sqlite.py   # SQLite schema + CRUD
 tests/                # parser + storage tests (offline sample HTML)
 .github/workflows/    # CI (ruff, black, pytest)
+## Sample report
+
+```bash
+webharvest report --db data/quotes.db --k 5
+
+webharvest report
+- Quotes in DB: 100
+- Books in DB:  60
+
+Top authors:
+- Albert Einstein: 10
+- J.K. Rowling: 9
+- Marilyn Monroe: 7
+- Dr. Seuss: 6
+- Mark Twain: 6
+
+Top tags:
+- love: 14
+- inspirational: 13
+- life: 13
+- humor: 12
+- books: 11
+
+Books stock: 60/60 in stock
+Average price by rating:
+- 1★: £34.31
+- 2★: £33.87
+- 3★: £38.81
+- 4★: £35.53
+- 5★: £32.48
+```
